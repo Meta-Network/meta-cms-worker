@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "Node",
+    "isolatedModules": true,
+    "target": "esnext",
+    "sourceMap": true,
+    "incremental": true
+  },
+  "ts-node": {
+    "compilerOptions": { "baseUrl": "src" }
+  }
+}
