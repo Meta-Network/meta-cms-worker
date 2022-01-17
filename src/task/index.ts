@@ -3,7 +3,7 @@ import { MetaWorker } from '@metaio/worker-model';
 
 import { getBackendService } from '../api';
 import { GitService } from '../git';
-import { HexoService } from '../hexo';
+import { createHexoService } from '../hexo';
 import { logger, loggerService } from '../logger';
 import { MixedTaskConfig } from '../types';
 
@@ -37,8 +37,7 @@ export const startGitTask = async (): Promise<void> => {
   checkAllowedTasks(taskMethod, allowedTasks);
 
   const gitService = new GitService(taskConf);
-  const hexoService = new HexoService(taskConf);
-  await hexoService.init();
+  const hexoService = await createHexoService(taskConf);
 
   if (taskMethod === MetaWorker.Enums.TaskMethod.GIT_CLONE_CHECKOUT) {
     logger.info(`Starting task cloneAndCheckoutFromRemote`);
