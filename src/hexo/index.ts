@@ -1,217 +1,193 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
 import { isDeployTask, isPostTask } from '@metaio/worker-common';
 import { MetaWorker } from '@metaio/worker-model';
-import childProcess from 'child_process';
-import fs from 'fs/promises';
 import Hexo from 'hexo';
 import HexoInternalConfig from 'hexo/lib/hexo/default_config';
-import { exists, existsSync } from 'hexo-fs';
-import { slugize } from 'hexo-util';
-import os from 'os';
+import { exists } from 'hexo-fs';
 import path from 'path';
-import process from 'process';
-import { sync } from 'resolve';
-import yaml from 'yaml';
 
 import { config } from '../configs';
+import {
+  DEFAULT_HEXO_AVATAR_URL,
+  DEFAULT_HEXO_CONFIG_FILE_NAME,
+  DEFAULT_HEXO_LANGUAGE,
+  DEFAULT_HEXO_PUBLIC_URL,
+  DEFAULT_HEXO_TIMEZONE,
+  TEMPLATE_PATH,
+  WORKSPACE_PATH,
+} from '../constants';
 import { logger } from '../logger';
 import { LogContext, MixedTaskConfig } from '../types';
-import { HexoConfig, HexoFrontMatter, HexoPostCreate } from '../types/hexo';
-import { formatUrl, isEmptyObj, omitObj } from '../utils';
+import { HexoConfig, HexoFrontMatter } from '../types/hexo';
+import {
+  formatUrl,
+  isEmptyObj,
+  objectToYamlFile,
+  omitObj,
+  yamlFileToObject,
+} from '../utils';
+import { createCommandHelper, IHexoCommandHelper } from './helpers';
 
-export class HexoService {
-  constructor(private readonly taskConfig: MixedTaskConfig) {
+export interface IHexoService {
+  generateHexoStaticFiles(): Promise<void>;
+}
+
+/**
+ * Create Hexo service
+ * @param taskConfig Worker task config
+ * @param args Hexo initialization options see: https://hexo.io/api/#Initialize
+ */
+export async function createHexoService(
+  taskConfig: MixedTaskConfig,
+  args?: Hexo.InstanceOptions,
+): Promise<HexoService> {
+  return await HexoService.createHexoService(taskConfig, args);
+}
+
+class HexoService implements IHexoService {
+  private constructor(private readonly taskConfig: MixedTaskConfig) {
     this.context = { context: HexoService.name };
     const {
-      task,
       git: { storage },
     } = this.taskConfig;
-    const baseDir = path.join(
-      os.tmpdir(),
-      task.taskWorkspace,
-      storage.reponame,
-    );
-    logger.verbose(`Hexo work dir is: ${baseDir}`, this.context);
-    const isExists = existsSync(baseDir);
-    if (!isExists) throw Error(`Hexo work dir does not exists`);
-    this.baseDir = baseDir;
+    const workDir = path.join(WORKSPACE_PATH, storage.reponame);
+    logger.verbose(`User workspace directory is ${workDir}`, this.context);
+    this.workingDirectory = workDir;
+    this.templateDirectory = TEMPLATE_PATH;
   }
 
   private readonly context: LogContext;
-  private readonly baseDir: string;
-  private inst: Hexo;
+  private readonly workingDirectory: string;
+  private readonly templateDirectory: string;
+  private hexo: IHexoCommandHelper;
 
-  private async execChildProcess(cmd: string): Promise<boolean> {
-    const promise = new Promise<boolean>((res, rej) => {
-      const process = childProcess.exec(cmd, { cwd: this.baseDir });
-      let stdout = '';
-      let stderr = '';
-      process.stdout.setEncoding('utf-8');
-      process.stderr.setEncoding('utf-8');
-      process.stdout.on('data', (data) => {
-        stdout += data;
-      });
-      process.stderr.on('data', (data) => {
-        stderr += data;
-      });
-      process.on('exit', (code, sig) => {
-        if (stdout) {
-          logger.verbose(`execChildProcess stdout\n${stdout}`, this.context);
-        }
-        if (stderr) {
-          logger.error(`execChildProcess stderr\n${stderr}`, this.context);
-        }
-        if (code === 0) {
-          logger.info(
-            `Child process exec '${cmd}' with exit code ${code} and signal ${sig}`,
-            this.context,
-          );
-          res(true);
-        }
-        rej(`Child process exec '${cmd}' failed with exit code ${code}`);
-      });
-      process.on('error', (err) => rej(err));
-    });
-    return await promise;
-  }
+  private async getDefaultHexoConfig(): Promise<HexoConfig> {
+    logger.info(`Get default Hexo config`, this.context);
+    const defaultConf = config.get<HexoConfig>('hexo', {} as HexoConfig);
 
-  private guessPackageManager(findPath: string): 'npm' | 'yarn' {
-    const yarnLock = path.join(findPath, 'yarn.lock');
-    const isYarn = existsSync(yarnLock);
-    if (isYarn) {
-      logger.verbose(
-        `Find yarn lockfile, use Yarn package manager`,
-        this.context,
-      );
-      return 'yarn';
-    }
-    logger.verbose(`Use NPM package manager`, this.context);
-    return 'npm';
-  }
-
-  private async installNodeModules(): Promise<void> {
-    logger.info(`Installing node modules for ${this.baseDir}`, this.context);
-    const _pm = this.guessPackageManager(this.baseDir);
-    let process = false;
-    if (_pm === 'yarn') {
-      process = await this.execChildProcess(
-        'yarn install --production=false --frozen-lockfile',
-      );
-    }
-    if (_pm === 'npm') {
-      process = await this.execChildProcess('npm ci');
-    }
-    if (process) logger.info(`Successfully install node modules`, this.context);
-  }
-
-  private async loadLocalHexoModule(
-    path: string,
-    args?: Hexo.InstanceOptions,
-  ): Promise<Hexo> {
-    const arg: Hexo.InstanceOptions = { ...args, debug: !!process.env.DEBUG };
-    logger.verbose(
-      `Try load Hexo module from: ${path}, args: ${JSON.stringify(arg)}`,
-      this.context,
-    );
-
-    try {
-      const modulePath = sync('hexo', { basedir: path });
-      const localHexo = await require(modulePath);
-      logger.info(`Use local Hexo module`, this.context);
-      return new localHexo(path, arg) as Hexo;
-    } catch (error) {
-      logger.error(`Local hexo loading failed in ${path}`, error, this.context);
-      logger.info(`Use worker Hexo module`, this.context);
-      return new Hexo(path, arg);
-    }
-  }
-
-  private async updateHexoConfigFile(
-    taskConfig: MetaWorker.Configs.DeployTaskConfig,
-  ): Promise<void> {
-    // Get worker Hexo config
-    const defConf = config.get<HexoConfig>('hexo', {} as HexoConfig);
-    if (isEmptyObj(defConf))
+    if (isEmptyObj(defaultConf)) {
       logger.warn(
-        `Can not find the default Hexo config, will ignore it`,
+        `Can not get default Hexo config, will ignore it`,
         this.context,
       );
+      return {} as HexoConfig;
+    }
 
-    // Create user Hexo config from taskConfig
+    return defaultConf;
+  }
+
+  private async getHexoConfigFromTaskConfig(
+    taskConfig: MetaWorker.Configs.DeployTaskConfig,
+  ): Promise<HexoConfig> {
+    logger.info(`Get Hexo config from task config`, this.context);
+    const isDeploy = isDeployTask(taskConfig);
+
+    if (!isDeploy) {
+      logger.warn(
+        `Task config is not for deploy, will ignore it`,
+        this.context,
+      );
+      return {} as HexoConfig;
+    }
+
     const { site, user, theme } = taskConfig;
     const userConf: Partial<HexoConfig> = {
       title: site.title,
       subtitle: site.subtitle || '',
       description: site.description || '',
       author: site.author || user.nickname || user.username || '',
-      avatar:
-        site.avatar ||
-        'https://ipfs.fleek.co/ipfs/bafybeiccss3figrixd5qhhv6i6zhbz5chmyls6ja5kscu6drg7fnjcnxgm',
+      avatar: site.avatar || DEFAULT_HEXO_AVATAR_URL,
       keywords: site.keywords || [],
       // No favicon on _config.yml(taskConfig.favicon)
-      language: site.language || 'en',
-      timezone: site.timezone || 'Asia/Shanghai',
+      language: site.language || DEFAULT_HEXO_LANGUAGE,
+      timezone: site.timezone || DEFAULT_HEXO_TIMEZONE,
       /**
        * On our platform, it always has a domain,
        * but Hexo not allow empty url,
        * if someting happen, use default
        */
-      url: formatUrl(site.domain) || 'https://example.com',
-      theme: theme.themeName.toLowerCase(),
+      url: formatUrl(site.domain) || DEFAULT_HEXO_PUBLIC_URL,
+      theme: theme?.themeName?.toLowerCase(),
     };
+    return userConf as HexoConfig;
+  }
 
-    const confName = '_config.yml';
-    const confPath = path.join(this.baseDir, confName); // Current not support Hexo multi config path
+  private async getHexoConfigFromWorkspace(): Promise<HexoConfig> {
+    logger.info(`Get Hexo config from workspace`, this.context);
+    const confPath = path.join(
+      this.workingDirectory,
+      DEFAULT_HEXO_CONFIG_FILE_NAME,
+    );
     const isExists = await exists(confPath);
-    // If no _config.yml, create it
+
     if (!isExists) {
       logger.warn(
-        `Can not find the Hexo config in ${this.baseDir}, will create it`,
+        `Can not find workspace Hexo config in ${confPath}, will ignore it`,
         this.context,
       );
-      try {
+      return {} as HexoConfig;
+    }
+
+    try {
+      const workConf = await yamlFileToObject<HexoConfig>(confPath);
+      return workConf;
+    } catch (error) {
+      logger.error(`${error}`, error, this.context);
+      logger.warn(
+        `Can not read or parse workspace Hexo config in ${confPath}, will ignore it`,
+        this.context,
+      );
+      return {} as HexoConfig;
+    }
+  }
+
+  private async createWorkspaceHexoConfigFile(
+    taskConfig: MetaWorker.Configs.DeployTaskConfig,
+  ): Promise<void> {
+    // Get default Hexo config
+    const defConf = await this.getDefaultHexoConfig();
+    // Get Hexo config from taskConfig
+    const userConf = await this.getHexoConfigFromTaskConfig(taskConfig);
+    // Current not support Hexo multi config path
+    const confPath = path.join(
+      this.workingDirectory,
+      DEFAULT_HEXO_CONFIG_FILE_NAME,
+    );
+    const isExists = await exists(confPath);
+
+    try {
+      // If has _config.yml, update it
+      if (isExists) {
+        logger.info(
+          `Hexo config in workspace path ${confPath} already exists, will update it`,
+          this.context,
+        );
+        const confRaw = await this.getHexoConfigFromWorkspace();
+        const conf = { ...defConf, ...confRaw, ...userConf };
+        logger.verbose(`Write Hexo config file ${confPath}`, this.context);
+        await objectToYamlFile(conf, confPath);
+      }
+      // If no _config.yml, create it
+      if (!isExists) {
+        logger.info(
+          `Hexo config in workspace path ${confPath} not exists, will create it`,
+          this.context,
+        );
         const conf: HexoConfig = {
           ...HexoInternalConfig,
           ...defConf,
           ...userConf,
         };
-        const yamlStr = yaml.stringify(conf);
-        const data = new Uint8Array(Buffer.from(yamlStr));
-        await fs.writeFile(confPath, data, { encoding: 'utf8' });
-        logger.info(`Write ${confPath} successfully`, this.context);
-        return;
-      } catch (error) {
-        logger.error(
-          `Can not write Hexo config file, path: ${confPath}`,
-          error,
-          this.context,
-        );
-        throw error;
+        logger.verbose(`Write Hexo config file ${confPath}`, this.context);
+        await objectToYamlFile(conf, confPath);
       }
-    }
-    // If has _config.yml, merge it
-    if (isExists) {
-      logger.verbose(
-        `Found the Hexo config in ${this.baseDir}, will update it`,
+    } catch (error) {
+      logger.error(
+        `Can not create or update workspace Hexo config file ${confPath}`,
+        error,
         this.context,
       );
-      try {
-        const confRawData = await fs.readFile(confPath, 'utf8');
-        const confRaw: HexoConfig = yaml.parse(confRawData);
-        const confNew = { ...defConf, ...confRaw, ...userConf };
-        const yamlStr = yaml.stringify(confNew);
-        const data = new Uint8Array(Buffer.from(yamlStr));
-        await fs.writeFile(confPath, data, { encoding: 'utf8' });
-        logger.info(`Update ${confPath} successfully`, this.context);
-        return;
-      } catch (error) {
-        logger.error(
-          `Can not update Hexo config file, path: ${confPath}`,
-          error,
-          this.context,
-        );
-        return;
-      }
+      // throw error when create Hexo config file
+      if (!isExists) throw error;
     }
   }
 
@@ -223,10 +199,9 @@ export class HexoService {
 
   private async createHexoPostFile(
     post: MetaWorker.Info.Post,
-    replace = false,
     layout: 'post' | 'draft',
+    replace = false,
   ): Promise<void> {
-    if (replace) logger.info(`Hexo create replace mode on`, this.context);
     const postData: Hexo.Post.Data & HexoFrontMatter = {
       layout,
       title: post.title,
@@ -237,26 +212,13 @@ export class HexoService {
       excerpt: post.summary || '',
       ...post,
     };
-    // @ts-ignore
-    if (postData.source) delete postData.source;
-    // @ts-ignore
-    if (postData.summary) delete postData.summary;
-    logger.info(`Create ${layout} file, title: ${post.title}`, this.context);
-    const _create = (await this.inst.post.create(postData, replace)) as unknown;
-    logger.verbose(
-      `Create ${layout} file: ${JSON.stringify(_create)}`,
-      this.context,
-    );
-    const { path } = _create as HexoPostCreate;
-    await fs.appendFile(path, `\n${post.source}\n`);
-    logger.info(`Successfully write source content to ${path}`, this.context);
+    // TODO
   }
 
   private async publishHexoDraftFile(
     post: MetaWorker.Info.Post,
     replace = false,
   ): Promise<void> {
-    if (replace) logger.info(`Hexo publish replace mode on`, this.context);
     const postData: Hexo.Post.Data & HexoFrontMatter = {
       layout: 'post',
       slug: post.title,
@@ -268,39 +230,7 @@ export class HexoService {
       categories: post.categories || [],
       excerpt: post.summary || '',
     };
-    logger.info(`Publish draft file, title: ${post.title}`, this.context);
-    const _publish = (await this.inst.post.publish(
-      postData,
-      replace,
-    )) as unknown;
-    logger.verbose(
-      `Publish draft file: ${JSON.stringify(_publish)}`,
-      this.context,
-    );
-    const { path } = _publish as HexoPostCreate;
-    logger.info(`Successfully publish draft file ${path}`, this.context);
-  }
-
-  private async getHexoPostFilePath(
-    post: MetaWorker.Info.Post,
-    layout: 'post' | 'draft',
-  ): Promise<string> {
-    if (typeof this.inst['execFilter'] === 'function') {
-      const postData: Hexo.Post.Data & HexoFrontMatter = {
-        layout,
-        slug: slugize(post.title, {
-          transform: this.inst.config.filename_case as 1 | 2,
-        }),
-      };
-
-      // @ts-ignore
-      const path = await this.inst.execFilter('new_post_path', postData, {
-        args: [true], // use replase mode
-        context: { ...this.inst }, // a Hexo instance copy
-      });
-
-      return path;
-    }
+    // TODO
   }
 
   private async getPostInfoWithNewTitle(
@@ -315,44 +245,6 @@ export class HexoService {
       key.startsWith('META_SPACE_INTERNAL'),
     );
     return omitObj(_post, propArr);
-  }
-
-  private async removeHexoPostFile(
-    post: MetaWorker.Info.Post,
-    layout: 'post' | 'draft',
-  ): Promise<void> {
-    const path = await this.getHexoPostFilePath(post, layout);
-    if (path) {
-      logger.info(
-        `Remove ${layout} file, title: ${post.title}, path: ${path}`,
-        this.context,
-      );
-      await fs.rm(path, { force: true });
-    } else {
-      logger.warn(
-        `Can not remove ${layout} file, title ${post.title} does not exists`,
-        this.context,
-      );
-    }
-  }
-
-  private async movePostFileToDraft(post: MetaWorker.Info.Post): Promise<void> {
-    const draftsPath = path.join(this.inst.source_dir, '_drafts');
-    const postsPath = path.join(this.inst.source_dir, '_posts');
-    const filePath = await this.getHexoPostFilePath(post, 'post');
-    const movePath = filePath.replace(postsPath, draftsPath);
-    if (path && movePath) {
-      logger.info(
-        `Move title ${post.title} from path ${filePath} to ${movePath}`,
-        this.context,
-      );
-      await fs.rename(filePath, movePath);
-    } else {
-      logger.warn(
-        `Can not move title ${post.title}, file ${filePath} does not exists`,
-        this.context,
-      );
-    }
   }
 
   private async processHexoPostFile(
@@ -370,72 +262,39 @@ export class HexoService {
         await processer(post);
       }
     } catch (error) {
-      await this.inst.exit(error);
+      await this.hexo.exit(error);
       throw error;
     }
   }
 
-  async init(args?: Hexo.InstanceOptions): Promise<void> {
+  private async initialize(args?: Hexo.InstanceOptions): Promise<void> {
     if (isDeployTask(this.taskConfig)) {
       // Update _config.yml before Hexo init
-      await this.updateHexoConfigFile(this.taskConfig);
+      await this.createWorkspaceHexoConfigFile(this.taskConfig);
     }
+    const hexo = await createCommandHelper(args);
+    this.hexo = hexo;
+    logger.info(`Hexo service has been initialized`, this.context);
+  }
 
-    await this.installNodeModules();
-    const _hexo = await this.loadLocalHexoModule(this.baseDir, args);
-
-    await _hexo.init();
-    logger.info(`Hexo version: ${_hexo.env.version}`, this.context);
-    logger.verbose(`Hexo base directory: ${_hexo.base_dir}`, this.context);
-    logger.verbose(`Hexo public directory: ${_hexo.public_dir}`, this.context);
-    logger.verbose(`Hexo source directory: ${_hexo.source_dir}`, this.context);
-    logger.verbose(`Hexo config file path: ${_hexo.config_path}`, this.context);
-    logger.info(`Hexo has been initialized`, this.context);
-
-    _hexo.on('ready', () => {
-      logger.verbose('Hexo initialization finished', this.context);
-    });
-    _hexo.on('new', (post) => {
-      logger.verbose(`Create new post ${post.path}`, this.context);
-    });
-    _hexo.on('processBefore', () => {
-      logger.verbose('Hexo process started', this.context);
-    });
-    _hexo.on('processAfter', () => {
-      logger.verbose('Hexo process finished', this.context);
-    });
-    _hexo.on('generateBefore', () => {
-      const postCount = _hexo.locals.get('posts').count();
-      logger.verbose(`Found ${postCount} Hexo posts`, this.context);
-    });
-    _hexo.on('generateAfter', () => {
-      logger.verbose('Hexo generate finished', this.context);
-    });
-    _hexo.on('exit', () => {
-      logger.verbose(`Hexo exited`, this.context);
-    });
-
-    this.inst = _hexo;
+  public static async createHexoService(
+    taskConfig: MixedTaskConfig,
+    args?: Hexo.InstanceOptions,
+  ): Promise<HexoService> {
+    const service = new HexoService(taskConfig);
+    await service.initialize(args);
+    return service;
   }
 
   async updateHexoConfigFiles(): Promise<void> {
     if (!isDeployTask(this.taskConfig))
       throw new Error(`Task config is not for deploy`);
-    await this.updateHexoConfigFile(this.taskConfig);
+    await this.createWorkspaceHexoConfigFile(this.taskConfig);
     await this.updateHexoThemeConfigFile(this.taskConfig);
   }
 
-  async generateHexoStaticFiles(): Promise<void> {
-    logger.info(`Generating Hexo static files`, this.context);
-    const _pm = this.guessPackageManager(this.baseDir);
-    if (_pm === 'yarn') {
-      await this.execChildProcess('yarn run hexo clean');
-      await this.execChildProcess('yarn run hexo generate');
-    }
-    if (_pm === 'npm') {
-      await this.execChildProcess('npm run hexo clean');
-      await this.execChildProcess('npm run hexo generate');
-    }
+  public async generateHexoStaticFiles(): Promise<void> {
+    this.hexo.generate();
   }
 
   async createHexoPostFiles(update = false): Promise<void> {
@@ -452,11 +311,11 @@ export class HexoService {
         }
         let _post = post;
         if (_post.META_SPACE_INTERNAL_NEW_TITLE) {
-          await this.removeHexoPostFile(_post, 'post');
+          await this.hexo.remove(_post, 'post');
           const _nPost = await this.getPostInfoWithNewTitle(_post);
           _post = _nPost;
         }
-        await this.createHexoPostFile(_post, update, 'post');
+        await this.createHexoPostFile(_post, 'post', update);
       },
     );
   }
@@ -478,11 +337,11 @@ export class HexoService {
         }
         let _post = post;
         if (_post.META_SPACE_INTERNAL_NEW_TITLE) {
-          await this.removeHexoPostFile(_post, 'draft');
+          await this.hexo.remove(_post, 'draft');
           const _nPost = await this.getPostInfoWithNewTitle(_post);
           _post = _nPost;
         }
-        await this.createHexoPostFile(_post, update, 'draft');
+        await this.createHexoPostFile(_post, 'draft', update);
       },
     );
   }
@@ -522,7 +381,7 @@ export class HexoService {
         } else {
           logger.info(`Move single Hexo post file to draft`, this.context);
         }
-        await this.movePostFileToDraft(post);
+        await this.hexo.conceal(post);
       },
     );
   }
@@ -539,7 +398,7 @@ export class HexoService {
         } else {
           logger.info(`Delete single Hexo post file`, this.context);
         }
-        await this.removeHexoPostFile(post, 'post');
+        await this.hexo.remove(post, 'post');
       },
     );
   }
