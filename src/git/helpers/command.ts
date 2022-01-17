@@ -38,8 +38,8 @@ export interface IGitCommandHelper {
  */
 export async function createCommandHelper(
   workingDirectory: string,
-): Promise<IGitCommandHelper> {
-  return await GitCommandHelper.createCommandManager(workingDirectory);
+): Promise<GitCommandHelper> {
+  return await GitCommandHelper.createCommandHelper(workingDirectory);
 }
 
 class GitCommandHelper implements IGitCommandHelper {
@@ -61,7 +61,7 @@ class GitCommandHelper implements IGitCommandHelper {
   };
   private workingDirectory = '';
 
-  private async initializeCommandManager(
+  private async initializeCommandHelper(
     workingDirectory: string,
   ): Promise<void> {
     this.workingDirectory = workingDirectory;
@@ -104,11 +104,11 @@ class GitCommandHelper implements IGitCommandHelper {
     return await execa('git', args, options);
   }
 
-  public static async createCommandManager(
+  public static async createCommandHelper(
     workingDirectory: string,
   ): Promise<GitCommandHelper> {
     const result = new GitCommandHelper();
-    await result.initializeCommandManager(workingDirectory);
+    await result.initializeCommandHelper(workingDirectory);
     return result;
   }
 
