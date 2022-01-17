@@ -16,14 +16,15 @@ export interface IHexoCommandHelper {
   create(
     post: PostMinimumProperties & Hexo.Post.Data,
     layout: 'post' | 'draft',
-    replace: boolean,
+    replace?: boolean,
   ): Promise<void>;
   publish(
     post: PostMinimumProperties & Hexo.Post.Data,
-    replace: boolean,
+    replace?: boolean,
   ): Promise<void>;
   conceal(post: Hexo.Post.Data): Promise<void>;
   remove(post: Hexo.Post.Data, layout: 'post' | 'draft'): Promise<void>;
+  exit(error?: unknown): Promise<void>;
 }
 
 /**
@@ -32,7 +33,7 @@ export interface IHexoCommandHelper {
  */
 export async function createCommandHelper(
   args?: Hexo.InstanceOptions,
-): Promise<IHexoCommandHelper> {
+): Promise<HexoCommandHelper> {
   return await HexoCommandHelper.createCommandHelper(args);
 }
 
@@ -240,5 +241,9 @@ class HexoCommandHelper implements IHexoCommandHelper {
         this.context,
       );
     }
+  }
+
+  public async exit(error?: unknown): Promise<void> {
+    await this.hexo.exit(error);
   }
 }
