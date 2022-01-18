@@ -9,3 +9,4 @@ export const DEFAULT_HEXO_LANGUAGE = 'en';
 export const DEFAULT_HEXO_TIMEZONE = 'Asia/Shanghai';
 export const DEFAULT_HEXO_PUBLIC_URL = 'https://example.com';
 export const DEFAULT_HEXO_CONFIG_FILE_NAME = '_config.yml';
+export const DEFAULT_META_SPACE_CONFIG_FILE_NAME = 'meta-space-config.yml';
