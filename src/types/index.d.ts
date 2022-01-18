@@ -13,3 +13,8 @@ export type GitAuthor = {
   name: string;
   email: string;
 };
+
+export type SymlinkObject = {
+  source: string;
+  destination: string;
+};
