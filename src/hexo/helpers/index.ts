@@ -9,21 +9,18 @@ import { sync } from 'resolve';
 import { TEMPLATE_PATH } from '../../constants';
 import { logger } from '../../logger';
 import { LogContext } from '../../types';
-import { HexoPostCreate } from '../../types/hexo';
+import { HexoPostCreate, HexoPostInfo } from '../../types/hexo';
 
 export interface IHexoCommandHelper {
   generate(): Promise<void>;
   create(
-    post: PostMinimumProperties & Hexo.Post.Data,
+    post: HexoPostInfo,
     layout: 'post' | 'draft',
     replace?: boolean,
   ): Promise<void>;
-  publish(
-    post: PostMinimumProperties & Hexo.Post.Data,
-    replace?: boolean,
-  ): Promise<void>;
-  conceal(post: Hexo.Post.Data): Promise<void>;
-  remove(post: Hexo.Post.Data, layout: 'post' | 'draft'): Promise<void>;
+  publish(post: HexoPostInfo, replace?: boolean): Promise<void>;
+  conceal(post: HexoPostInfo): Promise<void>;
+  remove(post: HexoPostInfo, layout: 'post' | 'draft'): Promise<void>;
   exit(error?: unknown): Promise<void>;
 }
 
@@ -36,11 +33,6 @@ export async function createCommandHelper(
 ): Promise<HexoCommandHelper> {
   return await HexoCommandHelper.createCommandHelper(args);
 }
-
-type PostMinimumProperties = {
-  title: string;
-  content: string;
-};
 
 class HexoCommandHelper implements IHexoCommandHelper {
   private constructor() {
@@ -125,7 +117,7 @@ class HexoCommandHelper implements IHexoCommandHelper {
   }
 
   private async getPostPath(
-    post: Hexo.Post.Data,
+    post: HexoPostInfo,
     layout: 'post' | 'draft',
   ): Promise<string> {
     if (typeof this.hexo['execFilter'] === 'function') {
@@ -168,12 +160,12 @@ class HexoCommandHelper implements IHexoCommandHelper {
   }
 
   public async create(
-    post: PostMinimumProperties & Hexo.Post.Data,
+    post: HexoPostInfo,
     layout: 'post' | 'draft',
     replace = false,
   ): Promise<void> {
     if (replace) logger.info(`Hexo create replace mode on`, this.context);
-    const data: PostMinimumProperties & Hexo.Post.Data = {
+    const data: HexoPostInfo = {
       ...post,
       layout,
     };
@@ -187,12 +179,9 @@ class HexoCommandHelper implements IHexoCommandHelper {
     await fs.appendFile(path, `\n${post.content}\n`);
   }
 
-  public async publish(
-    post: PostMinimumProperties & Hexo.Post.Data,
-    replace = false,
-  ): Promise<void> {
+  public async publish(post: HexoPostInfo, replace = false): Promise<void> {
     if (replace) logger.info(`Hexo publish replace mode on`, this.context);
-    const data: PostMinimumProperties & Hexo.Post.Data = {
+    const data: HexoPostInfo = {
       ...post,
       layout: 'post',
     };
@@ -205,7 +194,7 @@ class HexoCommandHelper implements IHexoCommandHelper {
     logger.info(`Publish post file to ${path}`, this.context);
   }
 
-  public async conceal(post: Hexo.Post.Data): Promise<void> {
+  public async conceal(post: HexoPostInfo): Promise<void> {
     const draftsPath = path.join(this.hexo.source_dir, '_drafts');
     const postsPath = path.join(this.hexo.source_dir, '_posts');
     const filePath = await this.getPostPath(post, 'post');
@@ -225,7 +214,7 @@ class HexoCommandHelper implements IHexoCommandHelper {
   }
 
   public async remove(
-    post: Hexo.Post.Data,
+    post: HexoPostInfo,
     layout: 'post' | 'draft',
   ): Promise<void> {
     const path = await this.getPostPath(post, layout);

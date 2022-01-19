@@ -293,7 +293,11 @@ export interface HexoConfig {
   readonly ignore: string[];
 }
 
-export type HexoFrontMatter = {
+type PostMinimumProperties = {
+  title: string;
+  content: string;
+};
+type HexoFrontMatter = {
   layout?: string;
   title?: string;
   date?: string | number;
@@ -306,6 +310,9 @@ export type HexoFrontMatter = {
   disableNunjucks?: boolean;
   lang?: string;
 };
+export type HexoPostInfo = PostMinimumProperties &
+  Hexo.Post.Data &
+  HexoFrontMatter;
 
 export type HexoPostCreate = {
   path: string;
