@@ -1,4 +1,10 @@
-import { isDeployTask, isPostTask, isPublishTask } from '@metaio/worker-common';
+import { MetaInternalResult, ServiceCode } from '@metaio/microservice-model';
+import {
+  BackendTaskService,
+  isDeployTask,
+  isPostTask,
+  isPublishTask,
+} from '@metaio/worker-common';
 import { MetaWorker } from '@metaio/worker-model';
 import assert from 'assert';
 import Hexo from 'hexo';
@@ -6,6 +12,7 @@ import HexoInternalConfig from 'hexo/lib/hexo/default_config';
 import { exists } from 'hexo-fs';
 import path from 'path';
 
+import { getBackendService } from '../api';
 import { config } from '../configs';
 import {
   DEFAULT_HEXO_AVATAR_URL,
@@ -19,11 +26,12 @@ import {
 } from '../constants';
 import { logger } from '../logger';
 import { LogContext, MixedTaskConfig, SymlinkObject } from '../types';
-import { HexoConfig, HexoFrontMatter } from '../types/hexo';
+import { HexoConfig, HexoPostInfo } from '../types/hexo';
 import {
   createSymlink,
   formatUrl,
   isEmptyObj,
+  makeArray,
   objectToYamlFile,
   omitObj,
   yamlFileToObject,
@@ -50,9 +58,12 @@ export async function createHexoService(
   return await HexoService.createHexoService(taskConfig, args);
 }
 
+type PostTaskResult = MetaWorker.Info.Post & PromiseSettledResult<void>;
+
 class HexoService implements IHexoService {
   private constructor(private readonly taskConfig: MixedTaskConfig) {
     this.context = { context: HexoService.name };
+    this.backend = getBackendService();
     const {
       git: { storage },
     } = this.taskConfig;
@@ -99,6 +110,7 @@ class HexoService implements IHexoService {
   private readonly workspaceMetaSpaceConfigPath: string;
   private readonly templateDirectory: string;
   private readonly templateHexoConfigPath: string;
+  private readonly backend: BackendTaskService;
   private hexo: IHexoCommandHelper;
 
   // #region Hexo config
@@ -395,6 +407,7 @@ class HexoService implements IHexoService {
   }
   // #endregion Meta Space config
 
+  // #region File and folder operations
   private async symlinkWorkspaceConfigFiles(): Promise<void> {
     logger.info(`Create workspace config file symlinks`, this.context);
     const workConf = await this.getHexoConfigFromWorkspace();
@@ -462,49 +475,20 @@ class HexoService implements IHexoService {
       throw error;
     }
   }
+  // #endregion File and folder operations
 
-  private async createHexoPostFile(
-    post: MetaWorker.Info.Post,
-    layout: 'post' | 'draft',
-    replace = false,
-  ): Promise<void> {
-    const postData: Hexo.Post.Data & HexoFrontMatter = {
-      layout,
-      title: post.title,
-      date: post.createdAt || post.updatedAt || Date.now(),
-      updated: post.updatedAt || '',
-      tags: post.tags || [],
-      categories: post.categories || [],
-      excerpt: post.summary || '',
-      ...post,
-    };
-    // TODO
-  }
-
-  private async publishHexoDraftFile(
-    post: MetaWorker.Info.Post,
-    replace = false,
-  ): Promise<void> {
-    const postData: Hexo.Post.Data & HexoFrontMatter = {
-      layout: 'post',
-      slug: post.title,
-      title: post.title,
-      date: post.createdAt || post.updatedAt || Date.now(),
-      // Below fields are not be update when publish from draft
-      updated: post.updatedAt || '',
-      tags: post.tags || [],
-      categories: post.categories || [],
-      excerpt: post.summary || '',
-    };
-    // TODO
-  }
-
-  private async getPostInfoWithNewTitle(
+  // #region Post info operations
+  private async processMetaSpaceInternalProperties(
     post: MetaWorker.Info.Post,
   ): Promise<MetaWorker.Info.Post> {
+    const hasProp = Object.keys(post).find((key) =>
+      key.startsWith('META_SPACE_INTERNAL'),
+    );
+    if (!hasProp) return;
+    logger.verbose(`Process Meta Space internal properties`, this.context);
     const _post: MetaWorker.Info.Post = {
       ...post,
-      title: post.META_SPACE_INTERNAL_NEW_TITLE as string,
+      title: String(post.META_SPACE_INTERNAL_NEW_TITLE),
     };
     // Remove all meta space internal props
     const propArr = Object.keys(_post).filter((key) =>
@@ -513,25 +497,98 @@ class HexoService implements IHexoService {
     return omitObj(_post, propArr);
   }
 
-  private async processHexoPostFile(
-    post: MetaWorker.Info.Post | MetaWorker.Info.Post[],
-    processer: (post: MetaWorker.Info.Post, index?: number) => Promise<void>,
+  private async convertMetaPostInfoToHexoPostInfo(
+    post: MetaWorker.Info.Post,
+    layout: 'post' | 'draft',
+  ): Promise<HexoPostInfo> {
+    logger.verbose(`Convert Meta post info to Hexo post info`, this.context);
+    const nowISO = new Date(Date.now()).toISOString();
+    const postData: HexoPostInfo = {
+      ...post,
+      layout,
+      slug: post.title,
+      title: post.title,
+      content: post.source,
+      date: post.createdAt || post.updatedAt || nowISO,
+      updated: post.updatedAt || nowISO,
+      tags: post.tags || [],
+      categories: post.categories || [],
+      excerpt: post.summary || '',
+    };
+    return postData;
+  }
+  // #endregion Post info operations
+
+  // #region Task operations
+  private async createHexoPostFile(
+    post: MetaWorker.Info.Post,
+    layout: 'post' | 'draft',
+    replace = false,
   ): Promise<void> {
-    try {
-      if (Array.isArray(post)) {
-        await Promise.allSettled(
-          post.map(async (_post, index) => {
-            await processer(_post, index);
-          }),
-        );
-      } else {
-        await processer(post);
-      }
-    } catch (error) {
-      await this.hexo.exit(error);
-      throw error;
+    logger.info(`Create Hexo post file`, this.context);
+    const data = await this.convertMetaPostInfoToHexoPostInfo(post, layout);
+    await this.hexo.create(data, layout, replace);
+  }
+
+  private async publishHexoDraftFile(
+    post: MetaWorker.Info.Post,
+    replace = false,
+  ): Promise<void> {
+    logger.info(`Publish Hexo draft file`, this.context);
+    const data = await this.convertMetaPostInfoToHexoPostInfo(post, 'post');
+    await this.hexo.publish(data, replace);
+  }
+
+  private async concealHexoPostFile(post: MetaWorker.Info.Post): Promise<void> {
+    logger.info(`Move Hexo post file to draft`, this.context);
+    const data = await this.convertMetaPostInfoToHexoPostInfo(post, 'post');
+    await this.hexo.conceal(data);
+  }
+
+  private async removeHexoPostFile(
+    post: MetaWorker.Info.Post,
+    layout: 'post' | 'draft',
+  ): Promise<void> {
+    logger.info(`Remove Hexo post file`, this.context);
+    const data = await this.convertMetaPostInfoToHexoPostInfo(post, layout);
+    await this.hexo.remove(data, layout);
+  }
+
+  private async processHexoPostFile(
+    post: MetaWorker.Info.Post[],
+    processer: (post: MetaWorker.Info.Post) => Promise<void>,
+  ): Promise<PostTaskResult[]> {
+    const promise = post.map(async (_post) => {
+      await processer(_post);
+    });
+    const result = await Promise.allSettled(promise);
+    const data = post.map((_post, index) =>
+      Object.assign({}, _post, result[index]),
+    );
+    return data;
+  }
+
+  private async processPostTaskResults(
+    results: PostTaskResult[],
+  ): Promise<void> {
+    const rejected = results.filter((res) => res.status === 'rejected');
+    if (!(Array.isArray(rejected) && rejected.length)) return;
+    const metaInternals = rejected.map(
+      (rej) =>
+        new MetaInternalResult<PostTaskResult>({
+          statusCode: 500,
+          serviceCode: ServiceCode.CMS,
+          retryable: false,
+          data: rej,
+          message: rej.reason,
+        }),
+    );
+    for (const data of metaInternals) {
+      logger.verbose(`Report worker post task errored`, this.context);
+      await this.backend.reportWorkerTaskErroredToBackend(data);
     }
   }
+  // #endregion Task operations
 
   private async initialize(args?: Hexo.InstanceOptions): Promise<void> {
     // Update _config.yml before Hexo init
@@ -576,109 +633,95 @@ class HexoService implements IHexoService {
     this.hexo.generate();
   }
 
-  async createHexoPostFiles(update = false): Promise<void> {
-    if (!isPostTask(this.taskConfig))
-      throw new Error('Task config is not for create post');
+  public async createHexoPostFiles(update = false): Promise<void> {
+    assert(
+      isPostTask(this.taskConfig),
+      new Error('Task config is not for create post'),
+    );
     const { post } = this.taskConfig;
-    await this.processHexoPostFile(
-      post,
-      async (post: MetaWorker.Info.Post, index?: number) => {
-        if (index) {
-          logger.info(`Create Hexo post file queue ${index + 1}`, this.context);
-        } else {
-          logger.info(`Create single Hexo post file`, this.context);
+    const postArr = makeArray(post);
+    const results = await this.processHexoPostFile(
+      postArr,
+      async (post: MetaWorker.Info.Post) => {
+        // Change title post
+        if (post.META_SPACE_INTERNAL_NEW_TITLE) {
+          // Remove older post
+          await this.removeHexoPostFile(post, 'post');
         }
-        let _post = post;
-        if (_post.META_SPACE_INTERNAL_NEW_TITLE) {
-          await this.hexo.remove(_post, 'post');
-          const _nPost = await this.getPostInfoWithNewTitle(_post);
-          _post = _nPost;
-        }
-        await this.createHexoPostFile(_post, 'post', update);
+        const processed = await this.processMetaSpaceInternalProperties(post);
+        await this.createHexoPostFile(processed, 'post', update);
       },
     );
+    await this.processPostTaskResults(results);
   }
 
-  async createHexoDraftFiles(update = false): Promise<void> {
-    if (!isPostTask(this.taskConfig))
-      throw new Error('Task config is not for create draft');
+  public async createHexoDraftFiles(update = false): Promise<void> {
+    assert(
+      isPostTask(this.taskConfig),
+      new Error('Task config is not for create draft'),
+    );
     const { post } = this.taskConfig;
-    await this.processHexoPostFile(
-      post,
-      async (post: MetaWorker.Info.Post, index?: number) => {
-        if (index) {
-          logger.info(
-            `Create Hexo draft file queue ${index + 1}`,
-            this.context,
-          );
-        } else {
-          logger.info(`Create single Hexo draft file`, this.context);
+    const postArr = makeArray(post);
+    const results = await this.processHexoPostFile(
+      postArr,
+      async (post: MetaWorker.Info.Post) => {
+        // Change title post
+        if (post.META_SPACE_INTERNAL_NEW_TITLE) {
+          // Remove older post
+          await this.removeHexoPostFile(post, 'post');
         }
-        let _post = post;
-        if (_post.META_SPACE_INTERNAL_NEW_TITLE) {
-          await this.hexo.remove(_post, 'draft');
-          const _nPost = await this.getPostInfoWithNewTitle(_post);
-          _post = _nPost;
-        }
-        await this.createHexoPostFile(_post, 'draft', update);
+        const processed = await this.processMetaSpaceInternalProperties(post);
+        await this.createHexoPostFile(processed, 'draft', update);
       },
     );
+    await this.processPostTaskResults(results);
   }
 
-  async publishHexoDraftFiles(update = false): Promise<void> {
-    if (!isPostTask(this.taskConfig))
-      throw new Error('Task config is not for publish draft');
+  public async publishHexoDraftFiles(update = false): Promise<void> {
+    assert(
+      isPostTask(this.taskConfig),
+      new Error('Task config is not for publish draft'),
+    );
     const { post } = this.taskConfig;
-    await this.processHexoPostFile(
-      post,
-      async (post: MetaWorker.Info.Post, index?: number) => {
-        if (index) {
-          logger.info(
-            `Publish Hexo draft file queue ${index + 1}`,
-            this.context,
-          );
-        } else {
-          logger.info(`Publish single Hexo draft file`, this.context);
-        }
+    const postArr = makeArray(post);
+    const results = await this.processHexoPostFile(
+      postArr,
+      async (post: MetaWorker.Info.Post) => {
         await this.publishHexoDraftFile(post, update);
       },
     );
+    await this.processPostTaskResults(results);
   }
 
-  async moveHexoPostFilesToDraft(): Promise<void> {
-    if (!isPostTask(this.taskConfig))
-      throw new Error('Task config is not for move post');
+  public async moveHexoPostFilesToDraft(): Promise<void> {
+    assert(
+      isPostTask(this.taskConfig),
+      new Error('Task config is not for move post'),
+    );
     const { post } = this.taskConfig;
-    await this.processHexoPostFile(
-      post,
-      async (post: MetaWorker.Info.Post, index?: number) => {
-        if (index) {
-          logger.info(
-            `Move Hexo post file to draft queue ${index + 1}`,
-            this.context,
-          );
-        } else {
-          logger.info(`Move single Hexo post file to draft`, this.context);
-        }
-        await this.hexo.conceal(post);
+    const postArr = makeArray(post);
+    const results = await this.processHexoPostFile(
+      postArr,
+      async (post: MetaWorker.Info.Post) => {
+        await this.concealHexoPostFile(post);
       },
     );
+    await this.processPostTaskResults(results);
   }
 
-  async deleteHexoPostFiles(): Promise<void> {
-    if (!isPostTask(this.taskConfig))
-      throw new Error('Task config is not for delete post');
+  public async deleteHexoPostFiles(): Promise<void> {
+    assert(
+      isPostTask(this.taskConfig),
+      new Error('Task config is not for delete post'),
+    );
     const { post } = this.taskConfig;
-    await this.processHexoPostFile(
-      post,
-      async (post: MetaWorker.Info.Post, index?: number) => {
-        if (index) {
-          logger.info(`Delete Hexo post file queue ${index + 1}`, this.context);
-        } else {
-          logger.info(`Delete single Hexo post file`, this.context);
-        }
-        await this.hexo.remove(post, 'post');
+    const postArr = makeArray(post);
+    const results = await this.processHexoPostFile(
+      postArr,
+      async (post: MetaWorker.Info.Post) => {
+        await this.removeHexoPostFile(post, 'post');
       },
     );
+    await this.processPostTaskResults(results);
   }
 }
