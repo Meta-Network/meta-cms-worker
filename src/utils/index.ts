@@ -76,3 +76,10 @@ export async function createSymlink(
   // Create symlink
   await ensureSymlink(sourcePath, destinationPath, 'junction');
 }
+
+export function makeArray<T = unknown>(data: T | T[]): T[] {
+  if (!Array.isArray(data)) {
+    return [data];
+  }
+  return data;
+}
