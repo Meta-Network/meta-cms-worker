@@ -1,24 +1,24 @@
 import { LoggerService, LoggerServiceOptions } from '@metaio/worker-common';
-import { URL } from 'url';
 
-import { config } from '../configs';
+import { getWorkerEnv } from '../configs';
 
 const getLogger = (): LoggerService => {
-  const appName = config.get<string>('WORKER_APP_NAME', 'app');
-  const hostName = config.get<string>('HOSTNAME');
-  if (!hostName) throw Error('Can not find HOSTNAME env');
-  const secret = config.get<string>('WORKER_SECRET');
-  if (!secret) throw Error('Can not find WORKER_SECRET env');
-  const lokiUrl = config.get<string>('WORKER_LOKI_URL');
-  if (!lokiUrl) throw Error('Can not find WORKER_LOKI_URL env');
-  const _backendUrl = config.get<string>('WORKER_BACKEND_URL');
-  if (!_backendUrl) throw Error('Can not find WORKER_BACKEND_URL env');
-  const baseUrl = `${_backendUrl}/`.replace(/([^:]\/)\/+/g, '$1');
-  const backendUrl = new URL('task/git', baseUrl).toString();
+  const {
+    WORKER_SECRET,
+    WORKER_NAME,
+    WORKER_TASK_ID,
+    WORKER_BACKEND_URL,
+    WORKER_LOKI_URL,
+  } = getWorkerEnv();
+  const appName = 'Meta-CMS-Worker';
+  const hostName = WORKER_NAME;
+  const secret = WORKER_SECRET;
+  const lokiUrl = WORKER_LOKI_URL;
+  const _backendUrl = WORKER_BACKEND_URL;
+  const backendUrl = `${_backendUrl}/`.replace(/([^:]\/)\/+/g, '$1');
 
   const options: LoggerServiceOptions = {
     appName,
-    hostName,
     secret,
     lokiUrl,
     backendUrl,
