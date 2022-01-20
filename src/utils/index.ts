@@ -46,7 +46,7 @@ export async function yamlFileToObject<T = unknown>(path: string): Promise<T> {
   return data;
 }
 
-async function exists(path: string): Promise<boolean> {
+export async function exists(path: string): Promise<boolean> {
   assert(path, new TypeError('parameter "path" is required!'));
   const promise = fs.access(path).then(
     () => true,
@@ -57,6 +57,7 @@ async function exists(path: string): Promise<boolean> {
   );
   return Promise.resolve(promise);
 }
+
 export async function createSymlink(
   source: string,
   destination: string,
