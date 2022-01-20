@@ -7,9 +7,9 @@ import {
 } from '@metaio/worker-common';
 import { MetaWorker } from '@metaio/worker-model';
 import assert from 'assert';
+import fs from 'fs/promises';
 import Hexo from 'hexo';
 import HexoInternalConfig from 'hexo/lib/hexo/default_config';
-import { exists } from 'hexo-fs';
 import path from 'path';
 
 import { getBackendService } from '../api';
@@ -29,6 +29,7 @@ import { LogContext, MixedTaskConfig, SymlinkObject } from '../types';
 import { HexoConfig, HexoPostInfo } from '../types/hexo';
 import {
   createSymlink,
+  exists,
   formatUrl,
   isEmptyObj,
   makeArray,
@@ -37,10 +38,6 @@ import {
   yamlFileToObject,
 } from '../utils';
 import { createCommandHelper, IHexoCommandHelper } from './helpers';
-
-export interface IHexoService {
-  generateHexoStaticFiles(): Promise<void>;
-}
 
 /**
  * Create Hexo service
@@ -60,7 +57,7 @@ export async function createHexoService(
 
 type PostTaskResult = MetaWorker.Info.Post & PromiseSettledResult<void>;
 
-class HexoService implements IHexoService {
+class HexoService {
   private constructor(private readonly taskConfig: MixedTaskConfig) {
     this.context = { context: HexoService.name };
     this.backend = getBackendService();
@@ -475,6 +472,37 @@ class HexoService implements IHexoService {
       throw error;
     }
   }
+
+  private async createDotNoJekyllFile(
+    workDir: string,
+    disableNoJekyll?: boolean,
+  ): Promise<void> {
+    if (disableNoJekyll) return;
+    const filePath = path.join(workDir, '.nojekyll');
+    const isExists = await exists(filePath);
+    if (isExists) {
+      logger.verbose(`.nojekyll file already exists.`, this.context);
+      return;
+    }
+    logger.info(`Create .nojekyll file ${filePath}`, this.context);
+    await fs.writeFile(filePath, '\n');
+  }
+
+  private async createCNameFile(
+    workDir: string,
+    content: string,
+  ): Promise<void> {
+    if (!content) return;
+    await fs.mkdir(workDir, { recursive: true });
+    const filePath = path.join(workDir, 'CNAME');
+    const isExists = await exists(filePath);
+    if (isExists) {
+      logger.verbose(`CNAME file already exists.`, this.context);
+      return;
+    }
+    logger.info(`Create CNAME file ${filePath}`, this.context);
+    await fs.writeFile(filePath, `${content}\n`);
+  }
   // #endregion File and folder operations
 
   // #region Post info operations
@@ -597,10 +625,6 @@ class HexoService implements IHexoService {
     await this.updateWorkspaceThemeConfigFile();
     // Update meta-space-config.yml before Hexo init
     await this.updateWorkspaceMetaSpaceConfigFile();
-    // Create _config.yml _config.theme.yml and meta-space-config.yml symlink before Hexo init
-    await this.symlinkWorkspaceConfigFiles();
-    // Create source directory symlink before Hexo init
-    await this.symlinkWorkspaceSourceDirectory();
     // Initialize Hexo
     const hexo = await createCommandHelper(args);
     this.hexo = hexo;
@@ -620,16 +644,11 @@ class HexoService implements IHexoService {
     return service;
   }
 
-  async updateHexoConfigFiles(): Promise<void> {
-    assert(
-      isDeployTask(this.taskConfig),
-      new Error('Task config is not for deploy.'),
-    );
-    await this.updateWorkspaceHexoConfigFile();
-    await this.updateWorkspaceThemeConfigFile();
-  }
-
   public async generateHexoStaticFiles(): Promise<void> {
+    assert(
+      isPublishTask(this.taskConfig),
+      new Error('Task config is not for publish site'),
+    );
     this.hexo.generate();
   }
 
@@ -723,5 +742,26 @@ class HexoService implements IHexoService {
       },
     );
     await this.processPostTaskResults(results);
+  }
+
+  public async symlinkWorkspaceDirectoryAndFiles(): Promise<void> {
+    // Create _config.yml _config.theme.yml and meta-space-config.yml symlink before Hexo init
+    await this.symlinkWorkspaceConfigFiles();
+    // Create source directory symlink before Hexo init
+    await this.symlinkWorkspaceSourceDirectory();
+  }
+
+  public async createDotNoJekyllAndCNameFile(): Promise<void> {
+    assert(
+      isPublishTask(this.taskConfig),
+      new Error('Task config is not for publish site'),
+    );
+    const { publish, site } = this.taskConfig;
+    const workDir = path.join(
+      this.templateDirectory,
+      publish?.publishDir || 'public',
+    );
+    await this.createDotNoJekyllFile(workDir);
+    await this.createCNameFile(workDir, site.domain);
   }
 }
