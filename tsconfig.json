@@ -12,8 +12,5 @@
     "target": "esnext",
     "sourceMap": true,
     "incremental": true
-  },
-  "ts-node": {
-    "compilerOptions": { "baseUrl": "src" }
   }
 }
