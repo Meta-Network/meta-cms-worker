@@ -95,20 +95,20 @@
   resolved "https://registry.yarnpkg.com/@metaio/microservice-model/-/microservice-model-1.0.3.tgz#b25367192ec658b4b381198f7100ab74db81e84b"
   integrity sha512-4p94ncBCegEDwaBeg+8kSbrv1tEzao6g9DYpH/KeTpVhDzs4DwiZfGOmEg+lTv04jUxKsFV2wM0ZAsb5GTiSsQ==
 
-"@metaio/worker-common@2.1.0":
-  version "2.1.0"
-  resolved "https://registry.yarnpkg.com/@metaio/worker-common/-/worker-common-2.1.0.tgz#54921ad230e8f1463db42d76f6c61319fb5bba89"
-  integrity sha512-hDZ1ZxEVGOvnseSLfsw89KqrgsfgRmxH1HfeYhOalR2jDwQptUNoZmUACF5rMKe0oEOilHL89o/6u/wxOv1JwA==
+"@metaio/worker-common@2.1.1":
+  version "2.1.1"
+  resolved "https://registry.yarnpkg.com/@metaio/worker-common/-/worker-common-2.1.1.tgz#fb9a61db3d2969115f3d3d264462b00f7a3a7170"
+  integrity sha512-VVVkb6ofz6Q/s5ouTDZENsSrBqsEosfYwtVZTNVJK97XHrdY1iWHwnOVEk003S9tM9fBlCxVNn5hkq7wRl175g==
   dependencies:
     lodash.get "^4.4.2"
     lodash.has "^4.5.2"
     lodash.set "^4.3.2"
     picocolors "^1.0.0"
 
-"@metaio/worker-model@2.1.0":
-  version "2.1.0"
-  resolved "https://registry.yarnpkg.com/@metaio/worker-model/-/worker-model-2.1.0.tgz#a217e9eb251cf84c7343dc5f8731de13e8a2a168"
-  integrity sha512-VZYQic7JQFjzLog2T1iQrc3k7Nb08WXqeqwWopo+Oy2iorwpNfZqer7PRPDLtzxdYhR/QOxKxbH2DsLRbyGyJA==
+"@metaio/worker-model@2.1.1":
+  version "2.1.1"
+  resolved "https://registry.yarnpkg.com/@metaio/worker-model/-/worker-model-2.1.1.tgz#dcbb799b0549d486e27bb8efa4717ce88ba175ce"
+  integrity sha512-9t/gCwCbeGdqvJJSJpciOijtPvz4BSxeRrFB1JUIzgirlLrrkY1P038/tz+w+pdYgZYv07+q0TN9FW7ipFCxPA==
   dependencies:
     type-fest "^2.9.0"
 
