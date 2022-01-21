@@ -8,6 +8,7 @@ import {
 import { MetaWorker } from '@metaio/worker-model';
 import assert from 'assert';
 import fs from 'fs/promises';
+import { copy } from 'fs-extra';
 import Hexo from 'hexo';
 import HexoInternalConfig from 'hexo/lib/hexo/default_config';
 import path from 'path';
@@ -503,6 +504,29 @@ class HexoService {
     logger.info(`Create CNAME file ${filePath}`, this.context);
     await fs.writeFile(filePath, `${content}\n`);
   }
+
+  private async copySourceDirectoryToWorkspace(): Promise<void> {
+    logger.info(`Copy source directory to workspace`, this.context);
+    const workspaceSourcePath = path.join(this.workspaceDirectory, 'source');
+    const templateSourcePath = path.join(this.templateDirectory, 'source');
+    try {
+      logger.verbose(
+        `Cpoy directory ${templateSourcePath} to ${workspaceSourcePath}`,
+        this.context,
+      );
+      await copy(templateSourcePath, workspaceSourcePath, {
+        recursive: true,
+        overwrite: true,
+      });
+    } catch (error) {
+      logger.error(
+        `Copy source directory to workspace failed`,
+        error,
+        this.context,
+      );
+      throw error;
+    }
+  }
   // #endregion File and folder operations
 
   // #region Post info operations
@@ -763,5 +787,13 @@ class HexoService {
     );
     await this.createDotNoJekyllFile(workDir);
     await this.createCNameFile(workDir, site.domain);
+  }
+
+  public async createWorkspaceSourceDirectory(): Promise<void> {
+    assert(
+      isDeployTask(this.taskConfig),
+      new Error('Task config is not for deploy site'),
+    );
+    await this.copySourceDirectoryToWorkspace();
   }
 }
