@@ -11,17 +11,20 @@ const getLogger = (): LoggerService => {
     WORKER_LOKI_URL,
   } = getWorkerEnv();
   const appName = 'Meta-CMS-Worker';
-  const hostName = WORKER_NAME;
+  const workerName = WORKER_NAME;
   const secret = WORKER_SECRET;
   const lokiUrl = WORKER_LOKI_URL;
   const _backendUrl = WORKER_BACKEND_URL;
   const backendUrl = `${_backendUrl}/`.replace(/([^:]\/)\/+/g, '$1');
+  const taskId = WORKER_TASK_ID;
 
   const options: LoggerServiceOptions = {
     appName,
+    workerName,
     secret,
-    lokiUrl,
     backendUrl,
+    lokiUrl,
+    taskId,
   };
   const service = new LoggerService(options);
 
