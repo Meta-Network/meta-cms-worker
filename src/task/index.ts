@@ -9,12 +9,18 @@ import { MixedTaskConfig } from '../types';
 export async function startWorkerTask(
   taskConf: MixedTaskConfig,
 ): Promise<void> {
-  const allowedTasks: MetaWorker.Enums.WorkerTaskMethod[] = [
+  const siteTasks: MetaWorker.Enums.WorkerTaskMethod[] = [
     MetaWorker.Enums.WorkerTaskMethod.DEPLOY_SITE,
     MetaWorker.Enums.WorkerTaskMethod.PUBLISH_SITE,
+  ];
+  const postTasks: MetaWorker.Enums.WorkerTaskMethod[] = [
     MetaWorker.Enums.WorkerTaskMethod.CREATE_POSTS,
     MetaWorker.Enums.WorkerTaskMethod.UPDATE_POSTS,
     MetaWorker.Enums.WorkerTaskMethod.DELETE_POSTS,
+  ];
+  const allowedTasks: MetaWorker.Enums.WorkerTaskMethod[] = [
+    ...siteTasks,
+    ...postTasks,
   ];
 
   const { taskId, taskMethod } = taskConf.task;
@@ -62,7 +68,7 @@ export async function startWorkerTask(
     await gitService.publishSiteToGitHubPages();
   }
 
-  if (taskMethod === MetaWorker.Enums.WorkerTaskMethod.CREATE_POSTS) {
+  if (postTasks.includes(taskMethod)) {
     logger.info(`Execute createGitService method`);
     const gitService = await createGitService(taskConf);
     logger.info(`Execute fetchRemoteStorageRepository method`);
@@ -71,12 +77,30 @@ export async function startWorkerTask(
     const hexoService = await createHexoService(taskConf);
     logger.info(`Execute symlinkWorkspaceDirectoryAndFiles method`);
     await hexoService.symlinkWorkspaceDirectoryAndFiles();
-    logger.info(`Execute createHexoPostFiles method`);
-    await hexoService.createHexoPostFiles(false);
-    logger.info(`Execute commitStorageRepositoryAllChanges method`);
-    await gitService.commitStorageRepositoryAllChanges(
-      `Create post ${Date.now()}`,
-    );
+    if (taskMethod === MetaWorker.Enums.WorkerTaskMethod.CREATE_POSTS) {
+      logger.info(`Execute createHexoPostFiles method`);
+      await hexoService.createHexoPostFiles(false);
+      logger.info(`Execute commitStorageRepositoryAllChanges method`);
+      await gitService.commitStorageRepositoryAllChanges(
+        `Create post ${Date.now()}`,
+      );
+    }
+    if (taskMethod === MetaWorker.Enums.WorkerTaskMethod.UPDATE_POSTS) {
+      logger.info(`Execute createHexoPostFiles method`);
+      await hexoService.createHexoPostFiles(true);
+      logger.info(`Execute commitStorageRepositoryAllChanges method`);
+      await gitService.commitStorageRepositoryAllChanges(
+        `Update post ${Date.now()}`,
+      );
+    }
+    if (taskMethod === MetaWorker.Enums.WorkerTaskMethod.DELETE_POSTS) {
+      logger.info(`Execute deleteHexoPostFiles method`);
+      await hexoService.deleteHexoPostFiles();
+      logger.info(`Execute commitStorageRepositoryAllChanges method`);
+      await gitService.commitStorageRepositoryAllChanges(
+        `Delete post ${Date.now()}`,
+      );
+    }
     logger.info(`Execute pushStorageRepositoryToRemote method`);
     await gitService.pushStorageRepositoryToRemote();
   }
