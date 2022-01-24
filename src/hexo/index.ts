@@ -155,13 +155,15 @@ class HexoService {
   private async getHexoConfigFromTaskConfig(): Promise<HexoConfig> {
     logger.info(`Get Hexo config from task config`, this.context);
 
-    if (isDeployTask(this.taskConfig)) {
-      const { site, user } = this.taskConfig;
-      const userConf: Partial<HexoConfig> = {
+    if (isDeployTask(this.taskConfig) || isPublishTask(this.taskConfig)) {
+      let userConf: Partial<HexoConfig> = {};
+      const { site } = this.taskConfig;
+      userConf = {
+        ...userConf,
         title: site.title,
-        subtitle: site.subtitle || '',
-        description: site.description || '',
-        author: site.author || user.nickname || user.username || '',
+        subtitle: site.subtitle,
+        description: site.description,
+        author: site.author,
         avatar: site.avatar || DEFAULT_HEXO_AVATAR_URL,
         keywords: site.keywords || [],
         // No favicon on _config.yml(taskConfig.favicon)
@@ -174,10 +176,20 @@ class HexoService {
          */
         url: formatUrl(site.domain) || DEFAULT_HEXO_PUBLIC_URL,
       };
+      if (isDeployTask(this.taskConfig)) {
+        const { user } = this.taskConfig;
+        userConf = {
+          ...userConf,
+          author: userConf.author || user.nickname || user.username,
+        };
+      }
       return userConf as HexoConfig;
     }
 
-    logger.warn(`Task config is not for deploy, will ignore it`, this.context);
+    logger.warn(
+      `Task config is not for deploy or publish, will ignore it`,
+      this.context,
+    );
     return {} as HexoConfig;
   }
 
