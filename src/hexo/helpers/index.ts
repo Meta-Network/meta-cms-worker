@@ -170,7 +170,7 @@ class HexoCommandHelper implements IHexoCommandHelper {
       layout,
     };
     logger.info(
-      `Create title ${post.title} post to ${layout} layout`,
+      `Create title "${post.title}" post to ${layout} layout`,
       this.context,
     );
     const _create = (await this.hexo.post.create(data, replace)) as unknown;
@@ -186,7 +186,7 @@ class HexoCommandHelper implements IHexoCommandHelper {
       layout: 'post',
     };
     logger.info(
-      `Publish title ${post.title} post to post layout`,
+      `Publish title "${post.title}" post to post layout`,
       this.context,
     );
     const _publish = (await this.hexo.post.publish(data, replace)) as unknown;
@@ -201,13 +201,13 @@ class HexoCommandHelper implements IHexoCommandHelper {
     if (filePath) {
       const movePath = filePath.replace(postsPath, draftsPath);
       logger.info(
-        `Move title ${post.title} post from path ${filePath} to ${movePath}`,
+        `Move title "${post.title}" post from path ${filePath} to ${movePath}`,
         this.context,
       );
       await fs.rename(filePath, movePath);
     } else {
       logger.warn(
-        `Can not move title ${post.title} post from posts to drafts, file ${filePath} does not exists`,
+        `Can not move title "${post.title}" post from posts to drafts, file ${filePath} does not exists`,
         this.context,
       );
     }
@@ -220,13 +220,13 @@ class HexoCommandHelper implements IHexoCommandHelper {
     const path = await this.getPostPath(post, layout);
     if (path) {
       logger.info(
-        `Remove title ${post.title} post from ${layout} layout, path: ${path}`,
+        `Remove title "${post.title}" post from ${layout} layout, path: ${path}`,
         this.context,
       );
       await fs.rm(path, { force: true });
     } else {
       logger.warn(
-        `Can not remove title ${post.title} post from ${layout} layout, file does not exists`,
+        `Can not remove title "${post.title}" post from ${layout} layout, file does not exists`,
         this.context,
       );
     }

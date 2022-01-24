@@ -645,13 +645,13 @@ class HexoService {
       const res = result[index];
       if (res.status === 'fulfilled') {
         logger.info(
-          `Process hexo post ${_post.title} ${res.status}`,
+          `Process hexo post "${_post.title}" ${res.status}`,
           this.context,
         );
       }
       if (res.status === 'rejected') {
         logger.error(
-          `Process hexo post ${_post.title} ${res.status} cause ${res.reason}`,
+          `Process hexo post "${_post.title}" ${res.status} cause ${res.reason}`,
           this.context,
         );
       }
