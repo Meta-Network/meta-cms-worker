@@ -105,15 +105,15 @@ class HexoCommandHelper implements IHexoCommandHelper {
   private async execHexo(
     cmd: string,
     reject = true,
-  ): Promise<execa.ExecaReturnValue<string>> {
+  ): Promise<execa.ExecaSyncReturnValue<string>> {
     const env = Object.assign({}, process.env);
-    const options: execa.Options = {
+    const options: execa.SyncOptions = {
       cwd: this.baseDir,
       env,
       reject,
     };
     logger.verbose(`Exec hexo command: ${cmd}`, this.context);
-    return await execa.command(cmd, options);
+    return execa.commandSync(cmd, options);
   }
 
   private async getPostPath(
