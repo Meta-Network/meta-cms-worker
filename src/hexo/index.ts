@@ -373,32 +373,47 @@ class HexoService {
     }
   }
 
-  private async updateWorkspaceMetaSpaceConfigFile(): Promise<void> {
-    logger.info(`Update workspace Meta Space config file`, this.context);
-    // Get Meta Space config from workspace
-    const workConf = await this.getMetaSpaceConfigFromWorkspace();
-    const confPath = this.workspaceMetaSpaceConfigPath;
-    let metaSpaceConfig = {} as MetaWorker.Configs.MetaSpaceConfig;
+  private async getMetaSpaceConfigFromTaskConfig(): Promise<MetaWorker.Configs.MetaSpaceConfig> {
+    logger.info(`Get Meta Space config from task config`, this.context);
 
     if (isDeployTask(this.taskConfig)) {
       const { user, site, theme, gateway, metadata } = this.taskConfig;
-      metaSpaceConfig = {
-        ...workConf,
+      const taskConf: MetaWorker.Configs.MetaSpaceConfig = {
         user,
         site,
         theme,
         gateway,
         metadata,
       };
+      return taskConf;
     }
 
     if (isPublishTask(this.taskConfig)) {
       const { metadata } = this.taskConfig;
-      metaSpaceConfig = {
-        ...workConf,
+      const taskConf: Partial<MetaWorker.Configs.MetaSpaceConfig> = {
         metadata,
       };
+      return taskConf as MetaWorker.Configs.MetaSpaceConfig;
     }
+
+    logger.warn(
+      `Task config is not for deploy or publish, will ignore it`,
+      this.context,
+    );
+    return {} as MetaWorker.Configs.MetaSpaceConfig;
+  }
+
+  private async updateWorkspaceMetaSpaceConfigFile(): Promise<void> {
+    logger.info(`Update workspace Meta Space config file`, this.context);
+    // Get Meta Space config from workspace
+    const workConf = await this.getMetaSpaceConfigFromWorkspace();
+    // Get Meta Space config from task config
+    const taskConf = await this.getMetaSpaceConfigFromTaskConfig();
+    const confPath = this.workspaceMetaSpaceConfigPath;
+    const metaSpaceConfig: MetaWorker.Configs.MetaSpaceConfig = {
+      ...workConf,
+      ...taskConf,
+    };
 
     try {
       logger.info(
