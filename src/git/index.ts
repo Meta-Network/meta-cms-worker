@@ -130,7 +130,16 @@ class GitService {
     empty?: boolean,
   ): Promise<void> {
     logger.verbose(`Commit with message ${msg}.`, this.context);
-    await git.commit(msg, this.gitAuthor, empty);
+    try {
+      await git.commit(msg, this.gitAuthor, empty);
+    } catch (error) {
+      // Avoid 'up to date' error
+      if (error instanceof Error && error.message.includes('up to date')) {
+        logger.warn(`${error.message}`, this.context);
+        return;
+      }
+      throw error;
+    }
   }
 
   private async setRepositoryRemote(
