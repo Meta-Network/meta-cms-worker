@@ -626,9 +626,22 @@ class HexoService {
       await processer(_post);
     });
     const result = await Promise.allSettled(promise);
-    const data = post.map((_post, index) =>
-      Object.assign({}, _post, result[index]),
-    );
+    const data = post.map((_post, index) => {
+      const res = result[index];
+      if (res.status === 'fulfilled') {
+        logger.info(
+          `Process hexo post ${_post.title} ${res.status}`,
+          this.context,
+        );
+      }
+      if (res.status === 'rejected') {
+        logger.error(
+          `Process hexo post ${_post.title} ${res.status} cause ${res.reason}`,
+          this.context,
+        );
+      }
+      return Object.assign({}, _post, res);
+    });
     return data;
   }
 
