@@ -22,12 +22,13 @@ export async function startWorkerTask(
 
   checkAllowedTasks(taskMethod, allowedTasks);
 
-  const gitService = await createGitService(taskConf);
-  const hexoService = await createHexoService(taskConf);
-
   if (taskMethod === MetaWorker.Enums.WorkerTaskMethod.DEPLOY_SITE) {
+    logger.info(`Execute createGitService method`);
+    const gitService = await createGitService(taskConf);
     logger.info(`Execute createStorageRepository method`);
     await gitService.createStorageRepository();
+    logger.info(`Execute createHexoService method`);
+    const hexoService = await createHexoService(taskConf);
     logger.info(`Execute createWorkspaceSourceDirectory method`);
     await hexoService.createWorkspaceSourceDirectory();
     logger.info(`Execute commitStorageRepositoryAllChanges method`);
@@ -36,5 +37,28 @@ export async function startWorkerTask(
     );
     logger.info(`Execute pushStorageRepositoryToRemote method`);
     await gitService.pushStorageRepositoryToRemote();
+  }
+
+  if (taskMethod === MetaWorker.Enums.WorkerTaskMethod.PUBLISH_SITE) {
+    logger.info(`Execute createGitService method`);
+    const gitService = await createGitService(taskConf);
+    logger.info(`Execute fetchRemoteStorageRepository method`);
+    await gitService.fetchRemoteStorageRepository();
+    logger.info(`Execute createHexoService method`);
+    const hexoService = await createHexoService(taskConf);
+    logger.info(`Execute commitStorageRepositoryAllChanges method`);
+    await gitService.commitStorageRepositoryAllChanges(
+      `Update config ${Date.now()}`,
+    );
+    logger.info(`Execute pushStorageRepositoryToRemote method`);
+    await gitService.pushStorageRepositoryToRemote();
+    logger.info(`Execute symlinkWorkspaceDirectoryAndFiles method`);
+    await hexoService.symlinkWorkspaceDirectoryAndFiles();
+    logger.info(`Execute generateHexoStaticFiles method`);
+    await hexoService.generateHexoStaticFiles();
+    logger.info(`Execute createDotNoJekyllAndCNameFile method`);
+    await hexoService.createDotNoJekyllAndCNameFile();
+    logger.info(`Execute publishSiteToGitHubPages method`);
+    await gitService.publishSiteToGitHubPages();
   }
 }
