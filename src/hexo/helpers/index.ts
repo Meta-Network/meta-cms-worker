@@ -175,8 +175,10 @@ class HexoCommandHelper implements IHexoCommandHelper {
     );
     const _create = (await this.hexo.post.create(data, replace)) as unknown;
     const { path } = _create as HexoPostCreate;
-    logger.info(`Write post content to ${path}`, this.context);
-    await fs.appendFile(path, `\n${post.content}\n`);
+    // post.content already write content to file
+    // logger.info(`Write post content to ${path}`, this.context);
+    // await fs.appendFile(path, `\n${post.content}\n`);
+    logger.info(`Create post file to ${path}`, this.context);
   }
 
   public async publish(post: HexoPostInfo, replace = false): Promise<void> {
