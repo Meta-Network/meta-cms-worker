@@ -12,9 +12,12 @@ export const isEmptyObj = (obj: Record<string, unknown>): boolean => {
 
 export const formatUrl = (url: string): string => {
   assert(url, new TypeError('parameter "url" is required!'));
-  // const _url = new URL(`https://${url}`);
-  // _url.protocol = 'https';
-  // return _url.href;
+  const testRegExp = new RegExp('^https?://');
+  if (testRegExp.test(url)) {
+    const _url = new URL(url);
+    _url.protocol = 'https';
+    return _url.href;
+  }
   return `https://${url}`;
 };
 
