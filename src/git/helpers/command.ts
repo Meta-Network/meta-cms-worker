@@ -6,7 +6,7 @@ import { gt } from 'semver';
 
 import { logger } from '../../logger';
 import { LogContext } from '../../types';
-import { escape } from '../utils';
+import { escape } from '../../utils';
 
 export interface IGitCommandHelper {
   add(pattern: string): Promise<string[]>;
