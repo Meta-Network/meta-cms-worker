@@ -61,4 +61,23 @@ export async function startWorkerTask(
     logger.info(`Execute publishSiteToGitHubPages method`);
     await gitService.publishSiteToGitHubPages();
   }
+
+  if (taskMethod === MetaWorker.Enums.WorkerTaskMethod.CREATE_POSTS) {
+    logger.info(`Execute createGitService method`);
+    const gitService = await createGitService(taskConf);
+    logger.info(`Execute fetchRemoteStorageRepository method`);
+    await gitService.fetchRemoteStorageRepository();
+    logger.info(`Execute createHexoService method`);
+    const hexoService = await createHexoService(taskConf);
+    logger.info(`Execute symlinkWorkspaceDirectoryAndFiles method`);
+    await hexoService.symlinkWorkspaceDirectoryAndFiles();
+    logger.info(`Execute createHexoPostFiles method`);
+    await hexoService.createHexoPostFiles(false);
+    logger.info(`Execute commitStorageRepositoryAllChanges method`);
+    await gitService.commitStorageRepositoryAllChanges(
+      `Create post ${Date.now()}`,
+    );
+    logger.info(`Execute pushStorageRepositoryToRemote method`);
+    await gitService.pushStorageRepositoryToRemote();
+  }
 }
