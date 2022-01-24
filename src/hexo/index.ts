@@ -548,7 +548,7 @@ class HexoService {
     const hasProp = Object.keys(post).find((key) =>
       key.startsWith('META_SPACE_INTERNAL'),
     );
-    if (!hasProp) return;
+    if (!hasProp) return post;
     logger.verbose(`Process Meta Space internal properties`, this.context);
     const _post: MetaWorker.Info.Post = {
       ...post,
