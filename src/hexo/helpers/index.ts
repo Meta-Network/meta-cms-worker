@@ -17,10 +17,10 @@ export interface IHexoCommandHelper {
     post: HexoPostInfo,
     layout: 'post' | 'draft',
     replace?: boolean,
-  ): Promise<void>;
-  publish(post: HexoPostInfo, replace?: boolean): Promise<void>;
-  conceal(post: HexoPostInfo): Promise<void>;
-  remove(post: HexoPostInfo, layout: 'post' | 'draft'): Promise<void>;
+  ): Promise<string>;
+  publish(post: HexoPostInfo, replace?: boolean): Promise<string>;
+  conceal(post: HexoPostInfo): Promise<string>;
+  remove(post: HexoPostInfo, layout: 'post' | 'draft'): Promise<string>;
   exit(error?: unknown): Promise<void>;
 }
 
@@ -163,7 +163,7 @@ class HexoCommandHelper implements IHexoCommandHelper {
     post: HexoPostInfo,
     layout: 'post' | 'draft',
     replace = false,
-  ): Promise<void> {
+  ): Promise<string> {
     if (replace) logger.info(`Hexo create replace mode on`, this.context);
     const data: HexoPostInfo = {
       ...post,
@@ -179,9 +179,10 @@ class HexoCommandHelper implements IHexoCommandHelper {
     // logger.info(`Write post content to ${path}`, this.context);
     // await fs.appendFile(path, `\n${post.content}\n`);
     logger.info(`Create post file to ${path}`, this.context);
+    return path;
   }
 
-  public async publish(post: HexoPostInfo, replace = false): Promise<void> {
+  public async publish(post: HexoPostInfo, replace = false): Promise<string> {
     if (replace) logger.info(`Hexo publish replace mode on`, this.context);
     const data: HexoPostInfo = {
       ...post,
@@ -194,9 +195,10 @@ class HexoCommandHelper implements IHexoCommandHelper {
     const _publish = (await this.hexo.post.publish(data, replace)) as unknown;
     const { path } = _publish as HexoPostCreate;
     logger.info(`Publish post file to ${path}`, this.context);
+    return path;
   }
 
-  public async conceal(post: HexoPostInfo): Promise<void> {
+  public async conceal(post: HexoPostInfo): Promise<string> {
     const draftsPath = path.join(this.hexo.source_dir, '_drafts');
     const postsPath = path.join(this.hexo.source_dir, '_posts');
     const filePath = await this.getPostPath(post, 'post');
@@ -207,18 +209,20 @@ class HexoCommandHelper implements IHexoCommandHelper {
         this.context,
       );
       await fs.rename(filePath, movePath);
+      return movePath;
     } else {
       logger.warn(
         `Can not move title "${post.title}" post from posts to drafts, file ${filePath} does not exists`,
         this.context,
       );
+      return filePath;
     }
   }
 
   public async remove(
     post: HexoPostInfo,
     layout: 'post' | 'draft',
-  ): Promise<void> {
+  ): Promise<string> {
     const path = await this.getPostPath(post, layout);
     if (path) {
       logger.info(
@@ -232,6 +236,7 @@ class HexoCommandHelper implements IHexoCommandHelper {
         this.context,
       );
     }
+    return path;
   }
 
   public async exit(error?: unknown): Promise<void> {
