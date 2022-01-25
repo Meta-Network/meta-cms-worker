@@ -7,7 +7,7 @@ import path from 'path';
 import {
   createCommandHelper,
   IGitCommandHelper,
-} from '../../src/git/helpers/command';
+} from '../../../src/git/helpers/command';
 
 interface GitCommandHelperTestInterface {
   baseDir: string;
