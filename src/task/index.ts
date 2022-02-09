@@ -1,13 +1,19 @@
 import { checkAllowedTasks } from '@metaio/worker-common';
 import { MetaWorker } from '@metaio/worker-model';
+import Hexo from 'hexo';
 
-import { createGitService } from '../git';
-import { createHexoService } from '../hexo';
+import { GitService } from '../git';
+import { HexoService } from '../hexo';
 import { logger } from '../logger';
 import { MixedTaskConfig } from '../types';
 
 export async function startWorkerTask(
   taskConf: MixedTaskConfig,
+  gitServiceFactory: (taskConfig: MixedTaskConfig) => Promise<GitService>,
+  hexoServiceFactory: (
+    taskConfig: MixedTaskConfig,
+    args?: Hexo.InstanceOptions,
+  ) => Promise<HexoService>,
 ): Promise<void> {
   const siteTasks: MetaWorker.Enums.WorkerTaskMethod[] = [
     MetaWorker.Enums.WorkerTaskMethod.DEPLOY_SITE,
@@ -29,12 +35,12 @@ export async function startWorkerTask(
   checkAllowedTasks(taskMethod, allowedTasks);
 
   if (taskMethod === MetaWorker.Enums.WorkerTaskMethod.DEPLOY_SITE) {
-    logger.info(`Execute createGitService method`);
-    const gitService = await createGitService(taskConf);
+    logger.info(`Execute gitServiceFactory method`);
+    const gitService = await gitServiceFactory(taskConf);
     logger.info(`Execute createStorageRepository method`);
     await gitService.createStorageRepository();
-    logger.info(`Execute createHexoService method`);
-    const hexoService = await createHexoService(taskConf);
+    logger.info(`Execute hexoServiceFactory method`);
+    const hexoService = await hexoServiceFactory(taskConf);
     logger.info(`Execute createWorkspaceSourceDirectory method`);
     await hexoService.createWorkspaceSourceDirectory();
     logger.info(`Execute commitStorageRepositoryAllChanges method`);
@@ -46,12 +52,12 @@ export async function startWorkerTask(
   }
 
   if (taskMethod === MetaWorker.Enums.WorkerTaskMethod.PUBLISH_SITE) {
-    logger.info(`Execute createGitService method`);
-    const gitService = await createGitService(taskConf);
+    logger.info(`Execute gitServiceFactory method`);
+    const gitService = await gitServiceFactory(taskConf);
     logger.info(`Execute fetchRemoteStorageRepository method`);
     await gitService.fetchRemoteStorageRepository();
-    logger.info(`Execute createHexoService method`);
-    const hexoService = await createHexoService(taskConf);
+    logger.info(`Execute hexoServiceFactory method`);
+    const hexoService = await hexoServiceFactory(taskConf);
     logger.info(`Execute commitStorageRepositoryAllChanges method`);
     await gitService.commitStorageRepositoryAllChanges(
       `Update config ${Date.now()}`,
@@ -69,12 +75,12 @@ export async function startWorkerTask(
   }
 
   if (postTasks.includes(taskMethod)) {
-    logger.info(`Execute createGitService method`);
-    const gitService = await createGitService(taskConf);
+    logger.info(`Execute gitServiceFactory method`);
+    const gitService = await gitServiceFactory(taskConf);
     logger.info(`Execute fetchRemoteStorageRepository method`);
     await gitService.fetchRemoteStorageRepository();
-    logger.info(`Execute createHexoService method`);
-    const hexoService = await createHexoService(taskConf);
+    logger.info(`Execute hexoServiceFactory method`);
+    const hexoService = await hexoServiceFactory(taskConf);
     logger.info(`Execute symlinkWorkspaceDirectoryAndFiles method`);
     await hexoService.symlinkWorkspaceDirectoryAndFiles();
     if (taskMethod === MetaWorker.Enums.WorkerTaskMethod.CREATE_POSTS) {

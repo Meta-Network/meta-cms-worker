@@ -40,25 +40,9 @@ import {
 } from '../utils';
 import { createCommandHelper, IHexoCommandHelper } from './helpers';
 
-/**
- * Create Hexo service
- * @param taskConfig Worker task config
- * @param args Hexo initialization options see: https://hexo.io/api/#Initialize
- */
-export async function createHexoService(
-  taskConfig: MixedTaskConfig,
-  args?: Hexo.InstanceOptions,
-): Promise<HexoService> {
-  assert(
-    !isEmptyObj(taskConfig),
-    new TypeError('parameter "taskConfig" is required!'),
-  );
-  return await HexoService.createHexoService(taskConfig, args);
-}
-
 type PostTaskResult = MetaWorker.Info.Post & PromiseSettledResult<void>;
 
-class HexoService {
+export class HexoService {
   private constructor(private readonly taskConfig: MixedTaskConfig) {
     this.context = { context: HexoService.name };
     this.backend = getBackendService();

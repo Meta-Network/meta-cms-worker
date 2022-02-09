@@ -2,6 +2,8 @@ import assert from 'assert';
 import { CronJob } from 'cron';
 
 import { getBackendService } from './api';
+import { GitService } from './git';
+import { HexoService } from './hexo';
 import { logger, loggerService } from './logger';
 import { startWorkerTask } from './task';
 import { MixedTaskConfig } from './types';
@@ -30,7 +32,11 @@ async function bootstrap(): Promise<void> {
   });
   healthCheck.start();
 
-  await startWorkerTask(taskConf);
+  await startWorkerTask(
+    taskConf,
+    GitService.createGitService,
+    HexoService.createHexoService,
+  );
   await http.reportWorkerTaskFinishedToBackend();
   loggerService.final('Task finished');
 }

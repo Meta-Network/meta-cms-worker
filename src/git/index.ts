@@ -13,21 +13,7 @@ import { createCommandHelper, IGitCommandHelper } from './helpers/command';
 import { GiteeService } from './services/gitee';
 import { GitHubService } from './services/github';
 
-/**
- * Create Git service
- * @param taskConfig Worker task config
- */
-export async function createGitService(
-  taskConfig: MixedTaskConfig,
-): Promise<GitService> {
-  assert(
-    !isEmptyObj(taskConfig),
-    new TypeError('parameter "taskConfig" is required!'),
-  );
-  return await GitService.createGitService(taskConfig);
-}
-
-class GitService {
+export class GitService {
   private constructor(private readonly taskConfig: MixedTaskConfig) {
     this.context = { context: GitService.name };
     const {
