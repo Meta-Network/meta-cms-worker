@@ -1,7 +1,7 @@
 // import { URL } from 'url';
 import assert from 'assert';
 import fs from 'fs/promises';
-import { ensureSymlink } from 'fs-extra';
+import { ensureSymlink, move } from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
 
@@ -75,7 +75,7 @@ export async function createSymlink(
   );
   if (exists(destinationPath)) {
     // If destination is exists, rename with .bak
-    await fs.rename(destinationPath, `${destinationPath}.bak`);
+    await move(destinationPath, `${destinationPath}.bak`, { overwrite: true });
   }
   // Create symlink
   await ensureSymlink(sourcePath, destinationPath, 'junction');
