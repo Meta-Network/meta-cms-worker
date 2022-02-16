@@ -154,9 +154,12 @@ class HexoCommandHelper implements IHexoCommandHelper {
   public async generate(): Promise<void> {
     logger.info(`Generates Hexo static files`, this.context);
     const cleanResult = await this.execHexo('yarn run hexo clean');
-    logger.debug(cleanResult.stdout, this.context);
+    logger.verbose(`Hexo clean output: \n${cleanResult.stdout}`, this.context);
     const generateResult = await this.execHexo('yarn run hexo generate');
-    logger.debug(generateResult.stdout, this.context);
+    logger.verbose(
+      `Hexo generate output: \n${generateResult.stdout}`,
+      this.context,
+    );
   }
 
   public async create(
