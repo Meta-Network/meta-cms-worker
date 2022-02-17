@@ -161,10 +161,11 @@ export class HexoService {
         url: formatUrl(site.domain) || DEFAULT_HEXO_PUBLIC_URL,
       };
       if (isDeployTask(this.taskConfig)) {
-        const { user } = this.taskConfig;
+        const { user, theme } = this.taskConfig;
         userConf = {
           ...userConf,
           author: userConf.author || user.nickname || user.username,
+          theme: theme?.themeName?.toLowerCase(),
         };
       }
       return userConf as HexoConfig;
@@ -221,6 +222,10 @@ export class HexoService {
       ...workConf,
       ...userConf,
     };
+    if (tempConf?.theme) {
+      // Force use template theme settings
+      finalConf.theme = tempConf?.theme;
+    }
     // Current not support Hexo multi config path
     const confPath = this.workspaceHexoConfigPath;
 
