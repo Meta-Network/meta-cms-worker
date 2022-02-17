@@ -153,13 +153,11 @@ class HexoCommandHelper implements IHexoCommandHelper {
 
   public async generate(): Promise<void> {
     logger.info(`Generates Hexo static files`, this.context);
-    const cleanResult = await this.execHexo('yarn run hexo clean');
-    logger.verbose(`Hexo clean output: \n${cleanResult.stdout}`, this.context);
-    const generateResult = await this.execHexo('yarn run hexo generate');
-    logger.verbose(
-      `Hexo generate output: \n${generateResult.stdout}`,
-      this.context,
-    );
+    const debug = process.env.DEBUG ? ' --debug' : '';
+    const clean = await this.execHexo(`yarn run hexo clean${debug}`);
+    logger.verbose(`Hexo clean output: \n${clean.stdout}`, this.context);
+    const generate = await this.execHexo(`yarn run hexo generate${debug}`);
+    logger.verbose(`Hexo generate output: \n${generate.stdout}`, this.context);
   }
 
   public async create(
