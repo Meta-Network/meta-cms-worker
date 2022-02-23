@@ -378,8 +378,11 @@ export class HexoService {
     }
 
     if (isPublishTask(this.taskConfig)) {
-      const { metadata } = this.taskConfig;
+      const { site, theme, gateway, metadata } = this.taskConfig;
       const taskConf: Partial<MetaWorker.Configs.MetaSpaceConfig> = {
+        site,
+        theme,
+        gateway,
         metadata,
       };
       return taskConf as MetaWorker.Configs.MetaSpaceConfig;
