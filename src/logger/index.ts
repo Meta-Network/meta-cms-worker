@@ -25,6 +25,7 @@ const getLogger = (): LoggerService => {
     backendUrl,
     lokiUrl,
     taskId,
+    metadata: { workerName },
   };
   const service = new LoggerService(options);
 
