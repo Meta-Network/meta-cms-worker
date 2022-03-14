@@ -1,7 +1,7 @@
 FROM node:16-bullseye AS builder
 WORKDIR /opt/MetaNetwork/Worker
 COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile
+RUN yarn install --immutable
 COPY . .
 RUN yarn run build
 RUN npm prune --production
