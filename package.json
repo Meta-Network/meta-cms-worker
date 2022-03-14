@@ -1,6 +1,6 @@
 {
   "name": "meta-cms-worker",
-  "version": "1.1.0",
+  "version": "1.5.0",
   "description": "Meta Space CMS Worker",
   "author": "Meta Network <noreply@metanetwork.online>",
   "private": true,
