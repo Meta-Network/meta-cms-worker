@@ -1,10 +1,11 @@
 FROM node:16-bullseye AS builder
 WORKDIR /opt/MetaNetwork/Worker
-COPY package.json yarn.lock ./
+COPY .yarn ./.yarn
+COPY package.json yarn.lock .yarnrc.yml ./
 RUN yarn install --immutable
 COPY . .
 RUN yarn run build
-RUN npm prune --production
+RUN yarn workspaces focus --production
 
 FROM node:16-bullseye
 WORKDIR /opt/MetaNetwork/Worker
