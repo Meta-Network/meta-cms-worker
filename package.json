@@ -4,7 +4,7 @@
   "description": "Meta Space CMS Worker",
   "author": "Meta Network <noreply@metanetwork.online>",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT License",
   "main": "dist/main.js",
   "engines": {
     "node": ">=16 <17"
